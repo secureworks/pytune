@@ -167,7 +167,7 @@ https://learn.microsoft.com/en-us/autopilot/add-devices#powershell
 Then, you can provide the hardware hash in `-H` parameter in `checkin` command.
 
 ```
-$ python3 pytune.py check_compliant -o Windows -c Windows_pytune.pfx -u testuser@*******.onmicrosoft.com -p *********** -H $HWHASH
+$ python3 pytune.py checkin -o Windows -d Windows_pytune -c Windows_pytune.pfx -m Windows_pytune_mdm.pfx  -u testuser@*******.onmicrosoft.com -p *********** -H $HWHASH
 ```
 
 Then, after the initial check-in with the hardware hash, the next check-in will give you the domain credential.
