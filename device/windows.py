@@ -18,8 +18,8 @@ from cryptography.hazmat.primitives.serialization import Encoding
 
 
 class Windows(Device):
-    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key):
-        super().__init__(logger, os, device_name, deviceid, uid, tenant, prt, session_key)
+    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy):
+        super().__init__(logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy)
         self.os_version = '10.0.19045.2006'
         self.ssp_version = self.os_version
         self.checkin_url = 'https://r.manage.microsoft.com/devicegatewayproxy/cimhandler.ashx'        
@@ -28,7 +28,7 @@ class Windows(Device):
     
     def get_enrollment_token(self, refresh_token):
         access_token, refresh_token = prtauth(
-            self.prt, self.session_key, '29d9ed98-a469-4536-ade2-f981bc1d605e', 'https://enrollment.manage.microsoft.com/', 'ms-aadj-redir://auth/mdm'
+            self.prt, self.session_key, '29d9ed98-a469-4536-ade2-f981bc1d605e', 'https://enrollment.manage.microsoft.com/', 'ms-aadj-redir://auth/mdm', self.proxy
             )
         return access_token
 
@@ -121,7 +121,9 @@ class Windows(Device):
         response = requests.post(
             url=enrollment_url,
             data=body,
-            headers={"Content-Type": "application/soap+xml; charset=utf-8"}
+            headers={"Content-Type": "application/soap+xml; charset=utf-8"},
+            proxies=self.proxy,
+            verify=False
         )
         xml = ET.fromstring(response.content.decode('utf-8'))
         binary_security_token = xml.find('.//{http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd}BinarySecurityToken').text
