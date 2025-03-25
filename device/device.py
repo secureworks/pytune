@@ -19,7 +19,7 @@ from roadtools.roadlib.auth import Authentication
 from utils.utils import prtauth, renew_token, token_renewal_for_enrollment, create_pfx, extract_pfx
 
 class Device:
-    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key):
+    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy):
         self.logger = logger
         self.os = os
         self.os_version = None
@@ -35,7 +35,12 @@ class Device:
         self.provider_name = None
         self.cname = None
         self.hwhash = None
+        self.proxy = proxy
         self.device_auth = DeviceAuthentication()
+        self.device_auth.proxies = proxy
+        self.device_auth.verify = False
+        self.device_auth.auth.proxies = proxy
+        self.device_auth.auth.verify = False
 
     def entra_join(self, username, password, access_token, deviceticket):
         devicereg = 'urn:ms-drs:enterpriseregistration.windows.net'
@@ -47,6 +52,8 @@ class Device:
         else:
             auth = Authentication(username=username, password=password)
             auth.resource_uri = devicereg
+            auth.proxies = self.proxy
+            auth.verify = False
             access_token = auth.authenticate_username_password()['accessToken']            
 
         certpath = f'{self.device_name}_cert.pem'
@@ -84,7 +91,7 @@ class Device:
         return
 
     def enroll_intune(self):
-        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None)
+        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None, self.proxy)
         enrollment_url = self.get_enrollment_info(access_token, self.provider_name)
         self.logger.info(f"resolved enrollment url: {enrollment_url}")
         
@@ -121,7 +128,9 @@ class Device:
     def get_enrollment_info(self, access_token, provider_name):
         response = requests.get(
             "https://graph.microsoft.com/v1.0/myorganization/servicePrincipals/appId=0000000a-0000-0000-c000-000000000000/endpoints",
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
+            proxies=self.proxy,
+            verify=False
         )
 
         for value in response.json()['value']:
@@ -217,7 +226,7 @@ class Device:
 
         response = requests.get(
             url=msi_url,
-            cert=(certpath, keypath)
+            cert=(certpath, keypath),
             )
         
         if response.status_code == 200 and file_name_hash:
@@ -290,13 +299,13 @@ class Device:
         return
 
     def check_compliant(self):
-        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None)
+        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None, self.proxy)
         iwservice_url = self.get_enrollment_info(access_token, 'IWService')        
         self.logger.info(f"resolved IWservice url: {iwservice_url}")
         token_renewal_url = self.get_enrollment_info(access_token, 'TokenRenewalService')
         self.logger.info(f"resolved token renewal url: {token_renewal_url}")      
-        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile')
-        enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token)        
+        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
+        enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token, self.proxy)        
         
         device_name = self.get_device_info(iwservice_url, enrollment_token, 'OfficialName')
         state = self.get_device_info(iwservice_url, enrollment_token, 'ComplianceState')
@@ -323,14 +332,14 @@ class Device:
         return
 
     def retire_intune(self):
-        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None)
+        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None, self.proxy)
         iwservice_url = self.get_enrollment_info(access_token, 'IWService')
         self.logger.info(f"resolved IWservice url: {iwservice_url}")
         token_renewal_url = self.get_enrollment_info(access_token, 'TokenRenewalService')
         self.logger.info(f"resolved token renewal url: {token_renewal_url}")
         
-        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile')
-        enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token)
+        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
+        enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token, self.proxy)
 
         retire_info = self.get_device_info(iwservice_url, enrollment_token, '#CommonContainer.Retire')
         if retire_info == None:
@@ -354,6 +363,8 @@ class Device:
         response = requests.post(
             url=f"{retire_url}?api-version=16.4&ssp={self.os}SSP&ssp-version={self.ssp_version}&os={self.os}&os-version={self.os_version}&os-sub=None&arch=ARM&mgmt-agent=Mdm",
             headers={"Authorization": f"Bearer {access_token}"},
+            proxies=self.proxy,
+            verify=False
             )
 
         if response.status_code == 204:
@@ -363,7 +374,9 @@ class Device:
     def get_device_info(self, iwservice_url, access_token, key):
         response = requests.get(
             url=f"{iwservice_url}/Devices?api-version=16.4&ssp={self.os}SSP&ssp-version={self.ssp_version}&os={self.os}&os-version={self.os_version}&os-sub=None&arch=ARM&mgmt-agent=Mdm",
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
+            proxies=self.proxy,
+            verify=False
             )
 
         for value in response.json()['value']:

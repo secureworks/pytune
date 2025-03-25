@@ -74,8 +74,15 @@ def gettokens(username, password, clientid, resource):
     auth.resource_uri = resource
     return auth.authenticate_username_password()
 
-def deviceauth(username, password, refresh_token, certpfx):
+def deviceauth(username, password, refresh_token, certpfx, proxy):
     device_auth = DeviceAuthentication()
+    device_auth.proxies = proxy
+    device_auth.verify = False
+    auth = Authentication()
+    auth.proxies = proxy
+    auth.verify = False
+    device_auth.auth = auth
+
     device_auth.loadcert(None, None, certpfx, 'password')
     
     if password:
@@ -85,8 +92,15 @@ def deviceauth(username, password, refresh_token, certpfx):
 
     return response['refresh_token'], response['session_key']
 
-def prtauth(prt, session_key, client_id, resource, redirect_uri):
+def prtauth(prt, session_key, client_id, resource, redirect_uri, proxy):
     device_auth = DeviceAuthentication()
+    device_auth.proxies = proxy
+    device_auth.verify = False
+    auth = Authentication()
+    auth.proxies = proxy
+    auth.verify = False
+    device_auth.auth = auth
+
     device_auth.prt = prt
     device_auth.session_key = binascii.unhexlify(session_key)
     res = device_auth.aad_brokerplugin_prt_auth(
@@ -101,7 +115,7 @@ def prtauth(prt, session_key, client_id, resource, redirect_uri):
     
     return res['access_token'], res['refresh_token']
 
-def renew_token(refresh_token, client_id, scope):
+def renew_token(refresh_token, client_id, scope, proxy):
     data = {
         'client_id':client_id,
         'grant_type':'refresh_token',
@@ -111,17 +125,21 @@ def renew_token(refresh_token, client_id, scope):
     
     response = requests.post(
         "https://login.microsoftonline.com/common/oAuth2/v2.0/token",
-        data=data
+        data=data,
+        proxies=proxy,
+        verify=False
     )
     json = response.json()
     return json['access_token']
 
-def token_renewal_for_enrollment(url, access_token):
+def token_renewal_for_enrollment(url, access_token, proxy):
     headers = {'Authorization': 'Bearer {}'.format(access_token)}
 
     response = requests.get(
         url=f"{url}?api-version=1.0",
-        headers=headers
+        headers=headers,
+        proxies=proxy,
+        verify=False
     )
 
     return response.json()['Result']['Token']

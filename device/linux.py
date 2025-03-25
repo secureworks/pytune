@@ -8,8 +8,8 @@ from cryptography.hazmat.backends import default_backend
 from utils.utils import prtauth, renew_token, extract_pfx
 
 class Linux(Device):
-    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key):
-        super().__init__(logger, os, device_name, deviceid, uid, tenant, prt, session_key)
+    def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy):
+        super().__init__(logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy)
         self.os_version = '22.04'
         self.ssp_version = '1.2312.35'
         self.checkin_url = None
@@ -17,7 +17,7 @@ class Linux(Device):
         self.cname = self.device_name
 
     def get_enrollment_token(self, refresh_token):
-        return renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'openid offline_access profile d4ebce55-015a-49b5-a083-c84d1797ae8c/.default')
+        return renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'openid offline_access profile d4ebce55-015a-49b5-a083-c84d1797ae8c/.default', self.proxy)
         
     def send_enroll_request(self, enrollment_url, csr_pem, csr_token, ztdregistrationid):
         data = {
@@ -29,7 +29,9 @@ class Linux(Device):
         response = requests.post(
             url=f'{enrollment_url}/enroll?api-version=1.0',
             json=data,
-            headers= {'Authorization': f'Bearer {csr_token}'}
+            headers= {'Authorization': f'Bearer {csr_token}'},
+            proxies=self.proxy,
+            verify=False
         )
 
         return response.json()
