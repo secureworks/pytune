@@ -397,6 +397,33 @@ class Windows(Device):
         os.remove(certpath)
         os.remove(keypath)
 
+    def download_remediation_scripts(self, mdmpfx):
+        certpath = 'pytune_mdm.crt'
+        keypath = 'pytune_mdm.key'
+        extract_pfx(mdmpfx, certpath, keypath)
+
+        ime = IME(self.device_name, certpath, keypath)
+        
+        self.logger.info(f'downloading remediation scripts...')
+        scripts = ime.get_remediation_scripts()
+        if len(scripts) == 0:
+            self.logger.error(f'available remediation scripts not found')
+        else:
+            self.logger.alert(f'remediation scripts found!')
+            i = 1
+            for script in scripts:
+                self.logger.info(f'#{i} (Remediation/Policy ID:{script["PolicyId"]}):\n')
+                print("Detection Script Parameters:" + script["PolicyScriptParameters"])
+                print("Detection Script:")
+                print(base64.b64decode(script["PolicyBody"]).decode('utf-8') + '\n')
+                print("Remediation Script Parameters:" + script["RemediationScriptParameters"])
+                print("Remediation Script:")
+                print(base64.b64decode(script["RemediationScript"]).decode('utf-8') + '\n')
+                i=i+1
+
+        os.remove(certpath)
+        os.remove(keypath)
+
 class IME():
     def __init__(self, device_name, certpath, keypath):
         self.device_name = device_name
@@ -497,6 +524,27 @@ class IME():
         response_payload = response.json()['ResponsePayload']
         decompressed_string = self.decompress_string(response_payload)
         return json.loads(decompressed_string)
+    
+    def get_remediation_scripts(self):
+
+        sidecar_url = self.resolve_service_address()
+        sessionid = str(uuid.uuid4())
+        data = self.create_request_data(sessionid, "GetScript")
+
+        headers = {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Prefer': 'return-content',
+        }
+
+        response = requests.put(
+            url=f'{sidecar_url}/SideCarGatewaySessions(\'{sessionid}\')?api-version=1.5',
+            cert=(self.certpath, self.keypath),
+            data=json.dumps(data),
+            headers=headers,
+            )
+        
+        response_payload = response.json()['ResponsePayload']
+        return json.loads(response_payload)
 
     def get_content_info(self, assigned_app):
         sidecar_url = self.resolve_service_address()

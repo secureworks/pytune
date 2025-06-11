@@ -91,6 +91,10 @@ class Pytune:
     def download_apps(self, device_name, mdmpfx, proxy):
         device = self.new_device('Windows', device_name, None, None, None, None, proxy)
         device.download_apps(mdmpfx)
+    
+    def download_remediation_scripts(self, device_name, mdmpfx, proxy):
+        device = self.new_device('Windows', device_name, None, None, None, None, proxy)
+        device.download_remediation_scripts(mdmpfx)
 
 def main():
     description = f"{banner}"
@@ -145,6 +149,10 @@ def main():
     download_apps_intune_parser.add_argument('-m', '--mdmpfx', required=True, action='store', help='mdm pfx path')
     download_apps_intune_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
 
+    download_apps_intune_parser = subparsers.add_parser('get_remediations', help='download available remediation scripts (only Windows supported since I\'m lazy)')
+    download_apps_intune_parser.add_argument('-m', '--mdmpfx', required=True, action='store', help='mdm pfx path')
+    download_apps_intune_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
+
     args = parser.parse_args()
     proxy=None
     if args.proxy:
@@ -170,6 +178,8 @@ def main():
         pytune.check_compliant(args.os, args.username, args.password, args.refresh_token, args.certpfx, proxy)                
     if args.command == 'download_apps':
         pytune.download_apps(args.device_name, args.mdmpfx, proxy)        
+    if args.command == 'get_remediations':
+        pytune.download_remediation_scripts(args.device_name, args.mdmpfx, proxy)  
 
 if __name__ == "__main__":
     main()
