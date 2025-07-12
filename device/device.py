@@ -105,9 +105,10 @@ class Device:
 
         csr_pem = base64.b64encode(csr_der).decode('utf-8')
         try:
+            self.logger.info('enrolling device to Intune...')
             response = self.send_enroll_request(enrollment_url, csr_pem, csr_token, None)
         except:
-            self.logger.error('device enroolemt failed. maybe enrollment restriction?')
+            self.logger.error('device enrollemt failed. maybe enrollment restriction?')
             return
 
         my_cert = self.parse_enroll_response(response)

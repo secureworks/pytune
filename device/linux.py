@@ -33,6 +33,7 @@ class Linux(Device):
             proxies=self.proxy,
             verify=False
         )
+        self.logger.debug(f'received response for enrollment request:\n{response.content.decode()}')
 
         return response.json()
     

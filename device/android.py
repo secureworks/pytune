@@ -113,7 +113,7 @@ class Android(Device):
             proxies=self.proxy,
             verify=False
         )
-
+        self.logger.debug(f'received response for enrollment request:\n{response.content.decode()}')
         xml = ET.fromstring(response.content.decode('utf-8'))
         binary_security_token = xml.find('.//{http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd}BinarySecurityToken').text
         return base64.b64decode(binary_security_token).decode('utf-8')

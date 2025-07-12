@@ -1,7 +1,7 @@
 import jwt
+import json
 import getpass
 import argparse
-from colr import color
 from device.device import Device
 from device.android import Android
 from device.windows import Windows
@@ -9,7 +9,7 @@ from device.linux import Linux
 from utils.utils import deviceauth, prtauth
 from utils.logger import Logger
 
-version = '1.1'
+version = '1.2'
 banner = r'''
  ______   __  __     ______   __  __     __   __     ______    
 /\  == \ /\ \_\ \   /\__  _\ /\ \/\ \   /\ "-.\ \   /\  ___\   
@@ -24,6 +24,14 @@ class Pytune:
     def __init__(self, logger):
         self.logger = logger
         return
+    
+    def load_tokenfile(self, tokenfile):
+        try:
+            with open(tokenfile, 'r') as f:
+                    data = json.load(f)
+        except:
+                self.logger.error('failed to load token file')
+        return data
        
     def get_password(self, password):
         if password is None:
@@ -55,8 +63,12 @@ class Pytune:
             device = Linux(self.logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy)
         return device
 
-    def entra_join(self, username, password, access_token, device_name, os, deviceticket, proxy):
+    def entra_join(self, username, password, access_token, tokenfile, device_name, os, deviceticket, proxy):
         device = self.new_device(os, device_name, None, None, None, None, proxy)
+
+        if tokenfile:
+            access_token = self.load_tokenfile(tokenfile).get('accessToken')
+
         if access_token is None:
             password = self.get_password(password)
 
@@ -68,23 +80,35 @@ class Pytune:
         device.entra_delete(certpfx)
         return
 
-    def enroll_intune(self, os, device_name, username, password, refresh_token, certpfx, proxy):
+    def enroll_intune(self, os, device_name, username, password, refresh_token, tokenfile, certpfx, proxy):
+        if tokenfile:
+            refresh_token = self.load_tokenfile(tokenfile).get('refreshToken')
+
         device = self.new_device(os, device_name, username, password, refresh_token, certpfx, proxy)
         device.enroll_intune()
 
-    def checkin(self, os, device_name, username, password, refresh_token, certpfx, mdmpfx, hwhash, proxy):
+    def checkin(self, os, device_name, username, password, refresh_token, tokenfile, certpfx, mdmpfx, hwhash, proxy):
+        if tokenfile:
+            refresh_token = self.load_tokenfile(tokenfile).get('refreshToken')
+
         device = self.new_device(os, device_name, username, password, refresh_token, certpfx, proxy)
         device.hwhash = hwhash
         device.checkin(mdmpfx)
         return
 
-    def retire_intune(self, os, username, password, refresh_token, certpfx, proxy):
+    def retire_intune(self, os, username, password, refresh_token, tokenfile, certpfx, proxy):
+        if tokenfile:
+            refresh_token = self.load_tokenfile(tokenfile).get('refreshToken')
+
         device = self.new_device(os, None, username, password, refresh_token, certpfx, proxy)
         device.retire_intune()
         return
 
-    def check_compliant(self, os, username, password, refresh_token, certpfx, proxy):
-        device = self.new_device(os, None, username, password, refresh_token, certpfx, proxy)
+    def check_compliant(self, username, password, refresh_token, tokenfile, certpfx, proxy):
+        if tokenfile:
+            refresh_token = self.load_tokenfile(tokenfile).get('refreshToken')
+
+        device = self.new_device('Windows', None, username, password, refresh_token, certpfx, proxy)
         device.check_compliant()
         return
 
@@ -98,14 +122,16 @@ class Pytune:
 
 def main():
     description = f"{banner}"
-    parser = argparse.ArgumentParser(add_help=True, description=color(description, fore='deepskyblue'), formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(add_help=True, description=f'\033[34m{description}\033[0m', formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-x', '--proxy', action='store', help='proxy to be used during authentication (format: http://proxyip:port)')
+    parser.add_argument('-v', '--verbose', action='store_true', help='show information for debugging')
     subparsers = parser.add_subparsers(dest='command', description='pytune commands')
     
     entra_join_parser = subparsers.add_parser('entra_join', help='join device to Entra ID')
     entra_join_parser.add_argument('-u', '--username', action='store', help='username')
     entra_join_parser.add_argument('-p', '--password', action='store', help='password')
     entra_join_parser.add_argument('-a', '--access_token', action='store', help='access token for device registration service')
+    entra_join_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
     entra_join_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
     entra_join_parser.add_argument('-o', '--os', required=True, action='store', help='os')
     entra_join_parser.add_argument('-D', '--deviceticket', required=False, action='store', help='device ticket')
@@ -117,6 +143,7 @@ def main():
     enroll_intune_parser.add_argument('-u', '--username', action='store', help='username')
     enroll_intune_parser.add_argument('-p', '--password', action='store', help='password')
     enroll_intune_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
+    enroll_intune_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
     enroll_intune_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
     enroll_intune_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
     enroll_intune_parser.add_argument('-o', '--os', required=True, action='store', help='os')
@@ -125,6 +152,7 @@ def main():
     checkin_parser.add_argument('-u', '--username', action='store', help='username')
     checkin_parser.add_argument('-p', '--password', action='store', help='password')
     checkin_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
+    checkin_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
     checkin_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
     checkin_parser.add_argument('-m', '--mdmpfx', required=True, action='store', help='mdm pfx path')
     checkin_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
@@ -135,6 +163,7 @@ def main():
     retire_intune_parser.add_argument('-u', '--username', action='store', help='username')
     retire_intune_parser.add_argument('-p', '--password', action='store', help='password')
     retire_intune_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
+    retire_intune_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
     retire_intune_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
     retire_intune_parser.add_argument('-o', '--os', required=True, action='store', help='os')
 
@@ -142,8 +171,8 @@ def main():
     check_compliant_parser.add_argument('-u', '--username', action='store', help='username')
     check_compliant_parser.add_argument('-p', '--password', action='store', help='password')
     check_compliant_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
+    check_compliant_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
     check_compliant_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
-    check_compliant_parser.add_argument('-o', '--os', required=True, action='store', help='os')
 
     download_apps_intune_parser = subparsers.add_parser('download_apps', help='download available win32apps and scripts (only Windows supported since I\'m lazy)')
     download_apps_intune_parser.add_argument('-m', '--mdmpfx', required=True, action='store', help='mdm pfx path')
@@ -161,21 +190,21 @@ def main():
             'http':args.proxy
             }
         
-    logger = Logger()
+    logger = Logger(args.verbose)
     pytune = Pytune(logger)
 
     if args.command == 'entra_join':
-        pytune.entra_join(args.username, args.password, args.access_token, args.device_name, args.os, args.deviceticket, proxy)
+        pytune.entra_join(args.username, args.password, args.access_token, args.tokenfile, args.device_name, args.os, args.deviceticket, proxy)
     if args.command == 'entra_delete':
         pytune.entra_delete(args.certpfx, proxy)
     if args.command == 'enroll_intune':
-        pytune.enroll_intune(args.os, args.device_name, args.username, args.password, args.refresh_token, args.certpfx, proxy)
+        pytune.enroll_intune(args.os, args.device_name, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, proxy)
     if args.command == 'checkin':
-        pytune.checkin(args.os, args.device_name, args.username, args.password, args.refresh_token, args.certpfx, args.mdmpfx, args.hwhash, proxy)
+        pytune.checkin(args.os, args.device_name, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, args.mdmpfx, args.hwhash, proxy)
     if args.command == 'retire_intune':
-        pytune.retire_intune(args.os, args.username, args.password, args.refresh_token, args.certpfx, proxy)
+        pytune.retire_intune(args.os, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, proxy)
     if args.command == 'check_compliant':
-        pytune.check_compliant(args.os, args.username, args.password, args.refresh_token, args.certpfx, proxy)                
+        pytune.check_compliant(args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, proxy)                
     if args.command == 'download_apps':
         pytune.download_apps(args.device_name, args.mdmpfx, proxy)        
     if args.command == 'get_remediations':
