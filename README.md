@@ -182,11 +182,12 @@ Then, after the initial check-in with the hardware hash, the next check-in will 
 
 ### Download Win32 apps and PowerShell scripts
 
-If there are Win32 apps or PowerShell scripts to be delviered, you can donwload it through `download_apps` command.
+If there are Win32 apps or PowerShell scripts to be delviered, you can donwload it through `download_apps` and `get_remediations` command.
+
 Here is the example of the command.
 
 ```
-$ python3 pytune.py download_apps-m Windows_pytune_mdm.pfx                                                                            
+$ python3 pytune.py download_apps -m Windows_pytune_mdm.pfx                                                                            
 [*] downloading scripts...
 [!] scripts found!
 [*] #1 (policyid:f7e2c3b6-b57f-43fb-a17f-2feab218806b):
@@ -250,7 +251,7 @@ Delete the device information in Microsoft Intune admin center > Windows > Enrol
 
 ### Enrollment restrictions
 
-There are some cases where you encounter several types of enrollment restrictions. When you run enroll_intune command with `-v` option, you will see the detailed error response from Intune.
+There are some cases where you encounter several types of enrollment restrictions. When you run enroll_intune command with `-v` option, you can see the detailed error response from Intune for debugging purposes.
 
 Here are the examples of the error response.
 
@@ -290,3 +291,34 @@ Enterprise</Message>
 </s:Envelope>
 ```
 
+- Personally owned device restriction
+
+```xml
+<s:Envelope
+	xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+	xmlns:a="http://www.w3.org/2005/08/addressing">
+	<s:Body>
+		<s:Fault>
+			<s:Code>
+				<s:Value>s:Receiver</s:Value>
+				<s:Subcode>
+					<s:Value>s:Authorization</s:Value>
+				</s:Subcode>
+			</s:Code>
+			<s:Reason>
+				<s:Text xml:lang="en-US">Device 
+Identifier not preregistered</s:Text>
+			</s:Reason>
+			<s:Detail>
+				<DeviceEnrollmentServiceError
+					xmlns="http://schemas.microsoft.com/windows/pki/2009/01/enrollment">
+					<ErrorType>DeviceNotSupported</ErrorType>
+					<Message>Device Identifier not 
+preregistered</Message>
+					<TraceId>c12a5f95-5e0d-4d25-ac12-d0d212c9543c</TraceId>
+				</DeviceEnrollmentServiceError>
+			</s:Detail>
+		</s:Fault>
+	</s:Body>
+</s:Envelope>
+```
