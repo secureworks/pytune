@@ -25,9 +25,8 @@ This tools gives red teamers following advantages;
 ## Usage
 
 ```
-python3 pytune.py -h
-usage: pytune.py [-h] {entra_join,entra_delete,enroll_intune,checkin,retire_intune,check_compliant,download_apps} ...
-
+$ python3 pytune.py -h
+usage: pytune.py [-h] [-x PROXY] [-v] {entra_join,entra_delete,enroll_intune,checkin,retire_intune,check_compliant,download_apps,get_remediations} ...
 
  ______   __  __     ______   __  __     __   __     ______    
 /\  == \ /\ \_\ \   /\__  _\ /\ \/\ \   /\ "-.\ \   /\  ___\   
@@ -35,7 +34,7 @@ usage: pytune.py [-h] {entra_join,entra_delete,enroll_intune,checkin,retire_intu
  \ \_\    \/\_____\    \ \_\  \ \_____\  \ \_\\"\_\  \ \_____\ 
   \/_/     \/_____/     \/_/   \/_____/   \/_/ \/_/   \/_____/ 
                                                                
-      Faking a device to Microsft Intune (version:1.0)
+      Faking a device to Microsft Intune (version:1.2)
 
 
 options:
@@ -44,7 +43,7 @@ options:
 subcommands:
   pytune commands
 
-  {entra_join,entra_delete,enroll_intune,checkin,retire_intune,check_compliant,download_apps}
+  {entra_join,entra_delete,enroll_intune,checkin,retire_intune,check_compliant,download_apps,get_remediations}
     entra_join          join device to Entra ID
     entra_delete        delete device from Entra ID
     enroll_intune       enroll device to Intune
@@ -52,6 +51,7 @@ subcommands:
     retire_intune       retire device from Intune
     check_compliant     check compliant status
     download_apps       download available win32apps and scripts (only Windows supported since I'm lazy)
+    get_remediations    download available remediation scripts (only Windows supported since I'm lazy)
 ```
 
 ### Enroll a fake device
@@ -137,7 +137,7 @@ The device's compliance state is evaluated through the information sent to Intun
 `check_compliant` command queies the compliance state of the fake device and tell you which settings are not compliant with the company's policy
 
 ```
-$ python3 pytune.py check_compliant -o Windows -c Windows_pytune.pfx -u testuser@*******.onmicrosoft.com -p ***********                                    
+$ python3 pytune.py check_compliant -c Windows_pytune.pfx -u testuser@*******.onmicrosoft.com -p ***********                                    
 [*] resolved IWservice url: https://fef.msuc06.manage.microsoft.com/TrafficGateway/TrafficRoutingService/IWService/StatelessIWService
 [*] resolved token renewal url: https://fef.msuc06.manage.microsoft.com/OAuth/StatelessOAuthService/OAuthProxy/
 [-] Windows_pytune is not compliant
@@ -186,7 +186,7 @@ If there are Win32 apps or PowerShell scripts to be delviered, you can donwload 
 Here is the example of the command.
 
 ```
-$ python3 pytune.py download_apps -d Windows_pytune -m Windows_pytune_mdm.pfx                                                                            
+$ python3 pytune.py download_apps-m Windows_pytune_mdm.pfx                                                                            
 [*] downloading scripts...
 [!] scripts found!
 [*] #1 (policyid:f7e2c3b6-b57f-43fb-a17f-2feab218806b):
@@ -245,3 +245,48 @@ Device was deleted in Azure AD
 
 If the device is enrolled as an AutoPilot device, then it fails to delete the device object from Entra ID.
 Delete the device information in Microsoft Intune admin center > Windows > Enrollment > Devices before `entra_delete` command.
+
+## Note
+
+### Enrollment restrictions
+
+There are some cases where you encounter several types of enrollment restrictions. When you run enroll_intune command with `-v` option, you will see the detailed error response from Intune.
+
+Here are the examples of the error response.
+
+- failed to enroll Android device because the target tenant might not be connected to Google Play account to manage Android enterprise devices (there might be other cases where you meet this error response)
+
+```xml
+$ python3 pytune.py -v enroll_intune -o Android -f .roadtools_auth -c Android_pytune.pfx -d Android_pytune 
+[*] resolved enrollment url: https://fef.msuc06.manage.microsoft.com/StatelessEnrollmentService/DeviceEnrollment.svc
+[*] enrolling device to Intune...
+[*] received response for enrollment request:
+
+<s:Envelope
+	xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+	xmlns:a="http://www.w3.org/2005/08/addressing">
+	<s:Body>
+		<s:Fault>
+			<s:Code>
+				<s:Value>s:Receiver</s:Value>
+				<s:Subcode>
+					<s:Value>s:Authorization</s:Value>
+				</s:Subcode>
+			</s:Code>
+			<s:Reason>
+				<s:Text xml:lang="en-US">AFW Put User: Account not onboarded to Android Enterprise</s:Text>
+			</s:Reason>
+			<s:Detail>
+				<DeviceEnrollmentServiceError
+					xmlns="http://schemas.microsoft.com/windows/pki/2009/01/enrollment">
+					<ErrorType>Authorization</ErrorType>
+					<Message>AFW Put User: Account not onboarded to Android 
+Enterprise</Message>
+					<TraceId>192f66b8-c7eb-424f-8ead-175aa17c5250</TraceId>
+				</DeviceEnrollmentServiceError>
+			</s:Detail>
+		</s:Fault>
+	</s:Body>
+</s:Envelope>
+```
+
