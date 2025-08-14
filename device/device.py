@@ -16,7 +16,7 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from roadtools.roadlib.deviceauth import DeviceAuthentication
 from roadtools.roadlib.auth import Authentication
-from utils.utils import prtauth, renew_token, token_renewal_for_enrollment, create_pfx, extract_pfx
+from utils.utils import prtauth, renew_token, token_renewal_for_enrollment, create_pfx, extract_pfx, get_devicetoken
 
 class Device:
     def __init__(self, logger, os, device_name, deviceid, uid, tenant, prt, session_key, proxy):
@@ -90,8 +90,12 @@ class Device:
         os.remove(keypath)        
         return
 
-    def enroll_intune(self):
-        access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None, self.proxy)
+    def enroll_intune(self, certpfx, refresh_token, is_device, is_hybrid):
+        if certpfx:
+            access_token, refresh_token = prtauth(self.prt, self.session_key, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', None, self.proxy)
+        else:
+            access_token, refresh_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/.default', self.proxy)
+
         enrollment_url = self.get_enrollment_info(access_token, self.provider_name)
         self.logger.info(f"resolved enrollment url: {enrollment_url}")
         
@@ -100,13 +104,17 @@ class Device:
             key_size=2048           
             )
         
-        csr_token = self.get_enrollment_token(refresh_token)
-        csr_der = self.create_csr(private_key, self.cname)
+        if is_device:
+            self.logger.info('uses device token for Intune enrollment')
+            csr_token = get_devicetoken(self.tenant, certpfx)
+        else:
+            csr_token = self.get_enrollment_token(refresh_token)
 
+        csr_der = self.create_csr(private_key, self.cname)
         csr_pem = base64.b64encode(csr_der).decode('utf-8')
         try:
             self.logger.info('enrolling device to Intune...')
-            response = self.send_enroll_request(enrollment_url, csr_pem, csr_token, None)
+            response = self.send_enroll_request(enrollment_url, csr_pem, csr_token, None, is_device, is_hybrid)
         except:
             self.logger.error('device enrollment failed. maybe enrollment restriction?')
             return
@@ -133,7 +141,6 @@ class Device:
             proxies=self.proxy,
             verify=False
         )
-
         for value in response.json()['value']:
             if value['providerName'] == provider_name:
                 return value['uri']
@@ -305,21 +312,23 @@ class Device:
         self.logger.info(f"resolved IWservice url: {iwservice_url}")
         token_renewal_url = self.get_enrollment_info(access_token, 'TokenRenewalService')
         self.logger.info(f"resolved token renewal url: {token_renewal_url}")      
-        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
+        renewal_token, _ = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
         enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token, self.proxy)        
         
         device_name = self.get_device_info(iwservice_url, enrollment_token, 'OfficialName')
         state = self.get_device_info(iwservice_url, enrollment_token, 'ComplianceState')
-        if state == 'Compliant':
+        reasons = self.get_device_info(iwservice_url, enrollment_token, 'NoncompliantRules')
+
+        if state == 'Compliant' or len(reasons) == 0:
             self.logger.success(f'{device_name} is compliant!')
             return
-        
-        self.logger.error(f'{device_name} is not compliant')
-        reasons = self.get_device_info(iwservice_url, enrollment_token, 'NoncompliantRules')
+
         if reasons == None:
             self.logger.info(f'maybe device is already retired or not enrolled yet')
             return
         
+        self.logger.error(f'{device_name} is not compliant')
+
         i = 1
         for reason in reasons:
             self.logger.alert(f'non-compliant reason #{i}:')
@@ -339,16 +348,22 @@ class Device:
         token_renewal_url = self.get_enrollment_info(access_token, 'TokenRenewalService')
         self.logger.info(f"resolved token renewal url: {token_renewal_url}")
         
-        renewal_token = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
+        renewal_token, _ = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'd4ebce55-015a-49b5-a083-c84d1797ae8c/.default openid offline_access profile', self.proxy)
         enrollment_token = token_renewal_for_enrollment(token_renewal_url, renewal_token, self.proxy)
 
         retire_info = self.get_device_info(iwservice_url, enrollment_token, '#CommonContainer.Retire')
         if retire_info == None:
             retire_info = self.get_device_info(iwservice_url, enrollment_token, '#CommonContainer.FullWipe')
         
+        enrollment_type = self.get_device_info(iwservice_url, enrollment_token, 'EnrollmentType')
+        if enrollment_type == 18:
+            self.logger.error(f'this device seems to be a corporate device. Ask IT admins to delete this device')
+            return
+
         if retire_info == None:
             self.logger.info(f'maybe this device is not enrolled or already retired')
             return 
+        
         
         retire_url = retire_info['target']
         self.logger.info(f"resolved reitrement url: {retire_url}")

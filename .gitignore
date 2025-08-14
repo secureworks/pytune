@@ -1,6 +1,7 @@
 *.pfx
 *.key
 *.crt
+*.pem
 *.intunewin
 *.msi
 .roadtools_auth

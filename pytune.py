@@ -6,7 +6,7 @@ from device.device import Device
 from device.android import Android
 from device.windows import Windows
 from device.linux import Linux
-from utils.utils import deviceauth, prtauth
+from utils.utils import deviceauth, prtauth, gettokens
 from utils.logger import Logger
 
 version = '1.2'
@@ -80,12 +80,18 @@ class Pytune:
         device.entra_delete(certpfx)
         return
 
-    def enroll_intune(self, os, device_name, username, password, refresh_token, tokenfile, certpfx, proxy):
+    def enroll_intune(self, os, device_name, username, password, refresh_token, tokenfile, certpfx, proxy, is_device, is_hybrid):
         if tokenfile:
             refresh_token = self.load_tokenfile(tokenfile).get('refreshToken')
 
         device = self.new_device(os, device_name, username, password, refresh_token, certpfx, proxy)
-        device.enroll_intune()
+
+        if not certpfx:
+            if not username or not password:
+                self.logger.error('username and passwords are required')
+                return
+            _, refresh_token = gettokens(username, password, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'https://graph.microsoft.com/', proxy)
+        device.enroll_intune(certpfx, refresh_token, is_device, is_hybrid)
 
     def checkin(self, os, device_name, username, password, refresh_token, tokenfile, certpfx, mdmpfx, hwhash, proxy):
         if tokenfile:
@@ -144,16 +150,18 @@ def main():
     enroll_intune_parser.add_argument('-p', '--password', action='store', help='password')
     enroll_intune_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
     enroll_intune_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
-    enroll_intune_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
+    enroll_intune_parser.add_argument('-c', '--certpfx', required=False, action='store', help='device cert pfx path')
     enroll_intune_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
     enroll_intune_parser.add_argument('-o', '--os', required=True, action='store', help='os')
+    enroll_intune_parser.add_argument('--device_token', action='store_true', help='use device token for enrollment')
+    enroll_intune_parser.add_argument('--hybrid', action='store_true', help='impersonate Entra hybrid joined device')
 
     checkin_parser = subparsers.add_parser('checkin', help='checkin to Intune')
     checkin_parser.add_argument('-u', '--username', action='store', help='username')
     checkin_parser.add_argument('-p', '--password', action='store', help='password')
     checkin_parser.add_argument('-r', '--refresh_token', action='store', help='refresh token for device registration service')
     checkin_parser.add_argument('-f', '--tokenfile', action='store', help='token file from roadtx (ex. .roadtools_auth)')
-    checkin_parser.add_argument('-c', '--certpfx', required=True, action='store', help='device cert pfx path')
+    checkin_parser.add_argument('-c', '--certpfx', required=False, action='store', help='device cert pfx path')
     checkin_parser.add_argument('-m', '--mdmpfx', required=True, action='store', help='mdm pfx path')
     checkin_parser.add_argument('-d', '--device_name', required=True, action='store', help='device name')
     checkin_parser.add_argument('-o', '--os', required=True, action='store', help='os')
@@ -198,7 +206,7 @@ def main():
     if args.command == 'entra_delete':
         pytune.entra_delete(args.certpfx, proxy)
     if args.command == 'enroll_intune':
-        pytune.enroll_intune(args.os, args.device_name, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, proxy)
+        pytune.enroll_intune(args.os, args.device_name, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, proxy, args.device_token, args.hybrid)
     if args.command == 'checkin':
         pytune.checkin(args.os, args.device_name, args.username, args.password, args.refresh_token, args.tokenfile, args.certpfx, args.mdmpfx, args.hwhash, proxy)
     if args.command == 'retire_intune':

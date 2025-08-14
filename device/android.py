@@ -48,9 +48,10 @@ class Android(Device):
         return xmltodict.unparse(syncml_data, pretty=False)
 
     def get_enrollment_token(self, refresh_token):
-        return renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'openid offline_access profile d4ebce55-015a-49b5-a083-c84d1797ae8c/.default', self.proxy)
+        access_token, _ = renew_token(refresh_token, '9ba1a5c7-f17a-4de9-a1f1-6178c8d51223', 'openid offline_access profile d4ebce55-015a-49b5-a083-c84d1797ae8c/.default', self.proxy)
+        return access_token
 
-    def send_enroll_request(self, enrollment_url, csr_pem, csr_token, ztdregistrationid):
+    def send_enroll_request(self, enrollment_url, csr_pem, csr_token, ztdregistrationid,  is_avd, is_hejd):
         token_b64 = base64.b64encode(csr_token.encode('utf-8')).decode('utf-8')
         body = f'''
     <s:Envelope

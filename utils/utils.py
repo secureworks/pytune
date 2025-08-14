@@ -69,10 +69,12 @@ def get_devicetoken(tenant, certpfx):
         )
     return res.json()['access_token']
 
-def gettokens(username, password, clientid, resource):
+def gettokens(username, password, clientid, resource, proxy):
     auth = Authentication(username, password, None, clientid)
+    auth.proxies = proxy
     auth.resource_uri = resource
-    return auth.authenticate_username_password()
+    response = auth.authenticate_username_password()
+    return response['accessToken'], response['refreshToken']
 
 def deviceauth(username, password, refresh_token, certpfx, proxy):
     device_auth = DeviceAuthentication()
@@ -130,7 +132,7 @@ def renew_token(refresh_token, client_id, scope, proxy):
         verify=False
     )
     json = response.json()
-    return json['access_token']
+    return json['access_token'], json['refresh_token']
 
 def token_renewal_for_enrollment(url, access_token, proxy):
     headers = {'Authorization': 'Bearer {}'.format(access_token)}
